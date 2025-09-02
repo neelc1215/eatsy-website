@@ -15,7 +15,8 @@
       !!! IMPORTANT !!!
       REPLACE 'YOUR_API_KEY_HERE' WITH YOUR ACTUAL GOOGLE MAPS API KEY.
     -->
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDwYVyBB8vsqfjTsL2V4ZMIf5V9d7B8-u0&libraries=places&callback=initialize" async defer></script>
+    <!-- UPDATED: Added the 'geometry' library needed for grid search calculations -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY_HERE&libraries=places,geometry&callback=initialize" async defer></script>
 
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -117,7 +118,7 @@
 
         function initialize() {
             const locationInput = document.getElementById('location');
-            // UPDATED: We need the viewport to create our search grid
+            // We need the full geometry, including viewport, for the grid search
             autocomplete = new google.maps.places.Autocomplete(locationInput, {
                 types: ['(regions)'],
                 fields: ['geometry', 'name'] 
@@ -150,7 +151,7 @@
             performGridSearch({});
         });
 
-        // --- NEW GRID SEARCH IMPLEMENTATION ---
+        // --- GRID SEARCH IMPLEMENTATION ---
         
         let allResults = [];
         let completedSearches = 0;
