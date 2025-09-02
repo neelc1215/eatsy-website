@@ -10,6 +10,14 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- 
+      !!! IMPORTANT !!!
+      REPLACE 'YOUR_API_KEY_HERE' WITH YOUR ACTUAL GOOGLE MAPS API KEY.
+      The '&libraries=places' part is crucial for restaurant searching and autocomplete.
+    -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDwYVyBB8vsqfjTsL2V4ZMIf5V9d7B8-u0&libraries=places" async></script>
+
     <style>
         /* Applying the Inter font to the whole page */
         body {
@@ -22,6 +30,24 @@
         }
         .fade-in {
             animation: fadeIn 0.5s ease-out forwards;
+        }
+        /* Style for Google Places Autocomplete dropdown */
+        .pac-container {
+            border-radius: 0.375rem; /* 6px */
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            border: 1px solid #e2e8f0;
+            margin-top: 0.25rem;
+        }
+        .pac-item {
+            padding: 0.75rem;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+        .pac-item:hover {
+            background-color: #f7fafc;
+        }
+        .pac-item-query {
+            font-weight: 500;
         }
     </style>
 </head>
@@ -40,11 +66,8 @@
             <div class="space-y-4">
                 <!-- Location Input -->
                 <div class="relative">
-                    <label for="location" class="block text-sm font-medium text-gray-700">Your Location</label>
-                    <input type="text" id="location" name="location" class="mt-1 block w-full bg-gray-100 border-transparent rounded-md p-3 focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., Downtown, Springfield" required autocomplete="off">
-                    <div id="location-dropdown" class="absolute z-10 w-full bg-white border border-gray-200 rounded-md mt-1 shadow-lg hidden max-h-48 overflow-y-auto">
-                        <!-- Dropdown items will be inserted here -->
-                    </div>
+                    <label for="location" class="block text-sm font-medium text-gray-700">Enter an address or city</label>
+                    <input type="text" id="location" name="location" class="mt-1 block w-full bg-gray-100 border-transparent rounded-md p-3 focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., West Lafayette, IN" required>
                 </div>
 
                 <!-- Budget Select -->
@@ -52,9 +75,10 @@
                     <label for="budget" class="block text-sm font-medium text-gray-700">Budget</label>
                     <select id="budget" name="budget" class="mt-1 block w-full bg-gray-100 border-transparent rounded-md p-3 focus:ring-teal-500 focus:border-teal-500">
                         <option value="any">Any</option>
-                        <option value="$">$ (Affordable)</option>
-                        <option value="$$">$$ (Moderate)</option>
-                        <option value="$$$">$$$ (Pricey)</option>
+                        <option value="1">$ (Affordable)</option>
+                        <option value="2">$$ (Moderate)</option>
+                        <option value="3">$$$ (Pricey)</option>
+                        <option value="4">$$$$ (Very Pricey)</option>
                     </select>
                 </div>
 
@@ -62,18 +86,22 @@
                 <div>
                     <label for="cuisine" class="block text-sm font-medium text-gray-700">Cuisine Preference</label>
                     <select id="cuisine" name="cuisine" class="mt-1 block w-full bg-gray-100 border-transparent rounded-md p-3 focus:ring-teal-500 focus:border-teal-500">
-                        <option value="any">Any</option>
-                        <option value="Italian">Italian</option>
-                        <option value="Mexican">Mexican</option>
-                        <option value="American">American</option>
-                        <option value="Japanese">Japanese</option>
-                        <option value="Indian">Indian</option>
+                        <option value="">Any</option>
+                        <option value="italian">Italian</option>
+                        <option value="mexican">Mexican</option>
+                        <option value="american">American</option>
+                        <option value="japanese">Japanese</option>
+                        <option value="indian">Indian</option>
+                        <option value="chinese">Chinese</option>
+                        <option value="thai">Thai</option>
+                        <option value="pizza">Pizza</option>
+                        <option value="sushi">Sushi</option>
                     </select>
                 </div>
             </div>
 
             <!-- Submit Button -->
-            <button type="submit" class="w-full bg-teal-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-transform transform hover:scale-105 mt-6">
+            <button type="submit" id="submit-button" class="w-full bg-teal-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-transform transform hover:scale-105 mt-6 disabled:bg-gray-400 disabled:cursor-not-allowed">
                 Find My Meal!
             </button>
         </form>
@@ -81,12 +109,12 @@
         <!-- Result Section - Hidden by default -->
         <div id="result-container" class="mt-8 hidden">
             <div class="border-t pt-6 text-center">
-                 <h2 class="text-sm font-medium text-gray-500 mb-2">Tonight you're eating at...</h2>
+                 <h2 id="result-heading" class="text-sm font-medium text-gray-500 mb-2">Tonight you're eating at...</h2>
                 <div id="restaurant-card" class="bg-teal-50 p-6 rounded-xl border border-teal-200">
                     <h3 id="restaurant-name" class="text-2xl font-bold text-teal-800"></h3>
                     <p id="restaurant-address" class="text-gray-600 mt-1"></p>
                     <p class="mt-2">
-                        <span id="restaurant-cuisine" class="inline-block bg-white text-teal-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full"></span>
+                        <span id="restaurant-rating" class="inline-block bg-white text-yellow-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full"></span>
                         <span id="restaurant-budget" class="inline-block bg-white text-teal-800 text-xs font-semibold px-2.5 py-0.5 rounded-full"></span>
                     </p>
                     <a id="map-link" href="#" target="_blank" class="mt-4 inline-block bg-white text-teal-600 font-semibold py-2 px-4 border border-teal-300 rounded-lg hover:bg-teal-100 transition-colors">
@@ -99,136 +127,122 @@
     </main>
 
     <script>
-        // --- MOCK RESTAURANT DATA ---
-        // In a real application, this data would come from an API like Google Maps.
-        // For this free version, we're using a pre-defined list.
-        const restaurants = [
-            { name: "The Pasta Boiler", address: "123 State St, West Lafayette", cuisine: "Italian", budget: "$$" },
-            { name: "Chauncey Hill Tacos", address: "456 Northwestern Ave, West Lafayette", cuisine: "Mexican", budget: "$" },
-            { name: "Purdue Burger Union", address: "789 Stadium Mall Dr, West Lafayette", cuisine: "American", budget: "$" },
-            { name: "Sushi Rolls & Degrees", address: "101 Pierce St, West Lafayette", cuisine: "Japanese", budget: "$$$" },
-            { name: "Taste of the Wabash", address: "212 River Rd, West Lafayette", cuisine: "Indian", budget: "$$" },
-            { name: "Lafayette Pizza Kitchen", address: "333 Main St, Lafayette", cuisine: "Italian", budget: "$" },
-            { name: "El Rodeo", address: "444 Levee Plaza, West Lafayette", cuisine: "Mexican", budget: "$$" },
-            { name: "The Triple XXX", address: "555 Salisbury St, West Lafayette", cuisine: "American", budget: "$" },
-            { name: "Katana", address: "666 Sagamore Pkwy, Lafayette", cuisine: "Japanese", budget: "$$" },
-            { name: "India Mahal", address: "777 Columbia St, Lafayette", cuisine: "Indian", budget: "$" }
-        ];
+        let autocomplete;
+        let selectedPlace; // To store the location data from autocomplete
 
-        // Pre-defined list of locations for the autocomplete dropdown.
-        const locations = [
-            "West Lafayette, IN",
-            "Lafayette, IN",
-            "Purdue University Campus",
-            "Chauncey Hill",
-            "Wabash Riverfront",
-            "Downtown Lafayette",
-            "Levee Plaza"
-        ];
+        // This function is called once the Google Maps script is loaded and ready.
+        function initAutocomplete() {
+            const locationInput = document.getElementById('location');
+            
+            // Initialize the Places Autocomplete service
+            autocomplete = new google.maps.places.Autocomplete(locationInput, {
+                types: ['(cities)'], // Restrict to cities/regions for broader searches
+                fields: ['geometry', 'name'] // Ask for location coordinates and name
+            });
 
+            // Listen for when a user selects a place from the dropdown
+            autocomplete.addListener('place_changed', () => {
+                selectedPlace = autocomplete.getPlace();
+            });
+        }
+        
         // --- DOM ELEMENT REFERENCES ---
-        // Get references to the HTML elements we need to interact with.
         const form = document.getElementById('restaurant-form');
+        const submitButton = document.getElementById('submit-button');
         const resultContainer = document.getElementById('result-container');
         const restaurantCard = document.getElementById('restaurant-card');
-        
-        // Form inputs
-        const locationInput = document.getElementById('location');
-        const locationDropdown = document.getElementById('location-dropdown');
-
-        // Result card elements
+        const resultHeading = document.getElementById('result-heading');
         const restaurantNameEl = document.getElementById('restaurant-name');
         const restaurantAddressEl = document.getElementById('restaurant-address');
-        const restaurantCuisineEl = document.getElementById('restaurant-cuisine');
+        const restaurantRatingEl = document.getElementById('restaurant-rating');
         const restaurantBudgetEl = document.getElementById('restaurant-budget');
         const mapLinkEl = document.getElementById('map-link');
 
-        // --- LOCATION AUTOCOMPLETE LOGIC ---
-        locationInput.addEventListener('input', () => {
-            const inputText = locationInput.value.trim().toLowerCase();
-            
-            // Clear and hide dropdown if input is empty
-            if (!inputText) {
-                locationDropdown.innerHTML = '';
-                locationDropdown.classList.add('hidden');
-                return;
-            }
-
-            // Find matching locations
-            const filteredLocations = locations.filter(loc => loc.toLowerCase().includes(inputText));
-            
-            // Populate and show the dropdown if there are matches
-            if (filteredLocations.length > 0) {
-                locationDropdown.innerHTML = filteredLocations.map(loc => 
-                    `<div class="p-3 hover:bg-teal-50 cursor-pointer rounded-md">${loc}</div>`
-                ).join('');
-                locationDropdown.classList.remove('hidden');
-            } else {
-                locationDropdown.innerHTML = '';
-                locationDropdown.classList.add('hidden');
-            }
-        });
-
-        // Handle clicks on dropdown items
-        locationDropdown.addEventListener('click', (event) => {
-            // Check if a dropdown item was clicked
-            if (event.target && event.target.matches('div.p-3')) {
-                locationInput.value = event.target.textContent; // Set input value
-                locationDropdown.innerHTML = ''; // Clear dropdown
-                locationDropdown.classList.add('hidden'); // Hide dropdown
-            }
-        });
-
-        // Hide dropdown when clicking anywhere else on the page
-        document.addEventListener('click', (event) => {
-            if (!locationInput.contains(event.target) && !locationDropdown.contains(event.target)) {
-                locationDropdown.classList.add('hidden');
-            }
-        });
-
         // --- FORM SUBMIT EVENT LISTENER ---
-        // Listen for when the user clicks the "Find My Meal!" button.
         form.addEventListener('submit', function(event) {
             event.preventDefault(); // Stop the form from reloading the page.
 
-            // Get the user's choices from the form.
+            if (!selectedPlace || !selectedPlace.geometry) {
+                alert("Please select a valid location from the dropdown suggestions.");
+                return;
+            }
+            
+            submitButton.disabled = true;
+            submitButton.textContent = 'Searching...';
+            resultContainer.classList.add('hidden'); // Hide previous results
+
             const budgetChoice = document.getElementById('budget').value;
             const cuisineChoice = document.getElementById('cuisine').value;
 
-            // --- FILTERING LOGIC ---
-            // Filter the main restaurant list to find ones that match the user's criteria.
-            let filteredRestaurants = restaurants.filter(restaurant => {
-                const budgetMatch = budgetChoice === 'any' || restaurant.budget === budgetChoice;
-                const cuisineMatch = cuisineChoice === 'any' || restaurant.cuisine === cuisineChoice;
-                return budgetMatch && cuisineMatch;
-            });
+            // --- REAL GOOGLE PLACES API SEARCH ---
+            const searchRequest = {
+                location: selectedPlace.geometry.location,
+                radius: '5000', // Search within a 5km radius (about 3 miles)
+                type: 'restaurant',
+                openNow: true, // Only find places that are currently open
+            };
             
-            // If no restaurants match, use the full list so we always have a result.
-            if (filteredRestaurants.length === 0) {
-                filteredRestaurants = restaurants;
+            // Add optional parameters if the user selected them
+            if (cuisineChoice) {
+                searchRequest.keyword = cuisineChoice;
+            }
+            if (budgetChoice !== 'any') {
+                searchRequest.minPrice = 0;
+                searchRequest.maxPrice = parseInt(budgetChoice);
             }
 
-            // --- RANDOM SELECTION ---
-            // Pick a random restaurant from the filtered list.
-            const randomIndex = Math.floor(Math.random() * filteredRestaurants.length);
-            const chosenRestaurant = filteredRestaurants[randomIndex];
+            // Create a temporary div to use the PlacesService
+            const service = new google.maps.places.PlacesService(document.createElement('div'));
 
-            // --- DISPLAY LOGIC ---
-            // Update the result card with the chosen restaurant's details.
-            restaurantNameEl.textContent = chosenRestaurant.name;
-            restaurantAddressEl.textContent = chosenRestaurant.address;
-            restaurantCuisineEl.textContent = chosenRestaurant.cuisine;
-            restaurantBudgetEl.textContent = chosenRestaurant.budget;
-            
-            // Create a Google Maps link from the address.
-            mapLinkEl.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(chosenRestaurant.address)}`;
+            service.nearbySearch(searchRequest, (results, status) => {
+                if (status === google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
+                    // --- RANDOM SELECTION ---
+                    const randomIndex = Math.floor(Math.random() * results.length);
+                    const chosenRestaurant = results[randomIndex];
 
-            // Show the result container with a nice fade-in effect.
-            resultContainer.classList.remove('hidden');
-            restaurantCard.classList.remove('fade-in'); // remove class to re-trigger animation
-            void restaurantCard.offsetWidth; // This is a trick to force a reflow for the animation
-            restaurantCard.classList.add('fade-in');
+                    // --- DISPLAY LOGIC ---
+                    displayRestaurant(chosenRestaurant);
+                } else {
+                    // --- HANDLE NO RESULTS ---
+                    displayNoResults();
+                }
+                
+                submitButton.disabled = false;
+                submitButton.textContent = 'Find My Meal!';
+            });
         });
+        
+        function displayRestaurant(restaurant) {
+            resultHeading.textContent = "Tonight you're eating at...";
+            restaurantNameEl.textContent = restaurant.name;
+            restaurantAddressEl.textContent = restaurant.vicinity; // 'vicinity' is like a friendly address
+            
+            // Handle optional rating and budget
+            restaurantRatingEl.textContent = restaurant.rating ? `⭐ ${restaurant.rating}` : '';
+            restaurantRatingEl.classList.toggle('hidden', !restaurant.rating);
+
+            restaurantBudgetEl.textContent = restaurant.price_level ? '$'.repeat(restaurant.price_level) : '';
+            restaurantBudgetEl.classList.toggle('hidden', !restaurant.price_level);
+            
+            // Create a Google Maps link using the Place ID for accuracy
+            mapLinkEl.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurant.name)}&query_place_id=${restaurant.place_id}`;
+
+            // Show the result card
+            restaurantCard.classList.remove('hidden');
+            resultContainer.classList.remove('hidden');
+            restaurantCard.classList.remove('fade-in');
+            void restaurantCard.offsetWidth;
+            restaurantCard.classList.add('fade-in');
+        }
+
+        function displayNoResults() {
+            resultHeading.textContent = "No matches found!";
+            restaurantCard.classList.add('hidden'); // Hide the card content
+            resultContainer.classList.remove('hidden'); // Show the container with the "No matches" heading
+        }
+        
+        // This makes the initAutocomplete function available to be called by the Google Maps script
+        window.onload = initAutocomplete;
     </script>
 
 </body>
