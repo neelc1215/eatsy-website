@@ -15,8 +15,7 @@
       !!! IMPORTANT !!!
       REPLACE 'YOUR_API_KEY_HERE' WITH YOUR ACTUAL GOOGLE MAPS API KEY.
     -->
-    <!-- UPDATED: Added the 'geometry' library needed for grid search calculations -->
-    <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY_HERE&libraries=places,geometry&callback=initialize" async defer></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDwYVyBB8vsqfjTsL2V4ZMIf5V9d7B8-u0&libraries=places,geometry&callback=initialize" async defer></script>
 
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -281,7 +280,8 @@
             submitButton.textContent = isLoading ? 'Searching...' : 'Find My Meal!';
         }
         
-        window.initialize = initialize;
+        // DELETED: This line was redundant and causing a conflict.
+        // window.initialize = initialize; 
     </script>
 
 </body>
