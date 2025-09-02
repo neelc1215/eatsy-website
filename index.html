@@ -41,7 +41,6 @@
         
         <header class="text-center mb-6">
             <h1 class="text-4xl font-bold text-teal-600">Eatsy</h1>
-            <!-- UPDATED: Removed the parentheses -->
             <p class="text-gray-500 mt-1">Can't decide? Let fate pick for you.</p>
         </header>
 
@@ -65,13 +64,13 @@
                     <label for="cuisine" class="block text-sm font-medium text-gray-700">Cuisine Preference</label>
                     <select id="cuisine" name="cuisine" class="mt-1 block w-full bg-gray-100 border-transparent rounded-md p-3 focus:ring-teal-500 focus:border-teal-500">
                         <option value="">Any</option>
-                        <option value="italian">Italian</option>
-                        <option value="mexican">Mexican</option>
-                        <option value="american">American</option>
-                        <option value="japanese">Japanese</option>
-                        <option value="indian">Indian</option>
-                        <option value="chinese">Chinese</option>
-                        <option value="thai">Thai</option>
+                        <option value="italian restaurant">Italian</option>
+                        <option value="mexican restaurant">Mexican</option>
+                        <option value="american restaurant">American</option>
+                        <option value="japanese restaurant">Japanese</option>
+                        <option value="indian restaurant">Indian</option>
+                        <option value="chinese restaurant">Chinese</option>
+                        <option value="thai restaurant">Thai</option>
                         <option value="pizza">Pizza</option>
                         <option value="sushi">Sushi</option>
                     </select>
@@ -82,7 +81,6 @@
                 Find My Meal!
             </button>
             
-            <!-- NEW: Divider and Feeling Lucky button -->
             <div class="flex items-center my-4">
                 <div class="flex-grow border-t border-gray-200"></div>
                 <span class="flex-shrink mx-4 text-gray-400 text-sm">or</span>
@@ -117,11 +115,13 @@
         let autocomplete;
         let selectedPlace; 
 
-        function initAutocomplete() {
+        // UPDATED: This function is called when the Google Maps script loads
+        function initialize() {
             const locationInput = document.getElementById('location');
+            // UPDATED: We need the geometry to get coordinates for nearbySearch
             autocomplete = new google.maps.places.Autocomplete(locationInput, {
                 types: ['(regions)'],
-                fields: ['name']
+                fields: ['geometry', 'name'] 
             });
             autocomplete.addListener('place_changed', () => {
                 selectedPlace = autocomplete.getPlace();
@@ -130,7 +130,7 @@
         
         const form = document.getElementById('restaurant-form');
         const submitButton = document.getElementById('submit-button');
-        const luckyButton = document.getElementById('lucky-button'); // NEW
+        const luckyButton = document.getElementById('lucky-button');
         const resultContainer = document.getElementById('result-container');
         const restaurantCard = document.getElementById('restaurant-card');
         const resultHeading = document.getElementById('result-heading');
@@ -143,71 +143,101 @@
         // Main form submission (with filters)
         form.addEventListener('submit', function(event) {
             event.preventDefault(); 
-            
             const budgetChoice = document.getElementById('budget').value;
             const cuisineChoice = document.getElementById('cuisine').value;
-            let searchQuery = (cuisineChoice ? cuisineChoice + ' ' : '') + 'restaurant in ' + (selectedPlace ? selectedPlace.name : document.getElementById('location').value);
-            
-            const searchRequest = {
-                query: searchQuery,
-                openNow: true,
-            };
-            
-            if (budgetChoice !== 'any') {
-                searchRequest.minPrice = 0;
-                searchRequest.maxPrice = parseInt(budgetChoice);
-            }
-            
-            performSearch(searchRequest, searchQuery);
+            performSearch({ budget: budgetChoice, cuisine: cuisineChoice });
         });
 
-        // NEW: "Feeling Lucky" button click event
+        // "Feeling Lucky" button click event
         luckyButton.addEventListener('click', function() {
-            // Broad search query, ignoring filters
-            let searchQuery = 'restaurant in ' + (selectedPlace ? selectedPlace.name : document.getElementById('location').value);
-            
-            const searchRequest = {
-                query: searchQuery,
-                openNow: true,
-            };
-            
-            performSearch(searchRequest, searchQuery);
+            // Perform search with no filters
+            performSearch({});
         });
 
-        // REFACTORED: Central function to perform the search
-        function performSearch(searchRequest, queryForErrorMessage) {
-            if (!selectedPlace && !document.getElementById('location').value) {
-                alert("Please enter a location first!");
+        // --- NEW: MAJOR REFACTOR OF THE SEARCH LOGIC TO HANDLE PAGINATION ---
+
+        let allResults = [];
+        let pageCount = 0;
+        let service;
+
+        function performSearch(filters) {
+            if (!selectedPlace || !selectedPlace.geometry) {
+                alert("Please select a valid location from the dropdown suggestions.");
                 return;
             }
 
-            // Set loading state for both buttons
+            // Reset state for new search
+            allResults = [];
+            pageCount = 0;
+            
             submitButton.disabled = true;
             luckyButton.disabled = true;
             submitButton.textContent = 'Searching...';
             resultContainer.classList.add('hidden');
 
-            const service = new google.maps.places.PlacesService(document.createElement('div'));
+            const searchRequest = {
+                location: selectedPlace.geometry.location,
+                radius: '5000', // 5km radius
+                type: 'restaurant',
+                openNow: true,
+            };
 
-            service.textSearch(searchRequest, (results, status) => {
-                if (status === google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
-                    const randomIndex = Math.floor(Math.random() * results.length);
-                    displayRestaurant(results[randomIndex]);
+            // Add filters if they exist
+            if (filters.cuisine) {
+                searchRequest.keyword = filters.cuisine;
+            }
+            if (filters.budget && filters.budget !== 'any') {
+                searchRequest.minPrice = 0;
+                searchRequest.maxPrice = parseInt(filters.budget);
+            }
+
+            service = new google.maps.places.PlacesService(document.createElement('div'));
+            // Start the first search
+            service.nearbySearch(searchRequest, searchCallback);
+        }
+
+        // This function is called for EACH page of results Google returns.
+        function searchCallback(results, status, pagination) {
+            if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+                allResults = allResults.concat(results); // Add new results to our master list
+                pageCount++;
+
+                // Fetch up to 2 more pages for a total of 3 (approx. 60 results)
+                // This gives us a much larger pool to choose from.
+                if (pagination && pagination.hasNextPage && pageCount < 3) {
+                    // Wait a moment before fetching the next page, as per Google's recommendation
+                    setTimeout(() => {
+                        pagination.nextPage();
+                    }, 200);
                 } else {
-                    displayNoResults(queryForErrorMessage);
+                    // We have all our results, now we can pick one!
+                    pickRandomRestaurant();
                 }
-                
-                // Reset button states
-                submitButton.disabled = false;
-                luckyButton.disabled = false;
-                submitButton.textContent = 'Find My Meal!';
-            });
+            } else if (pageCount === 0) {
+                // This means the very first search failed, so there are no results.
+                displayNoResults();
+                resetButtons();
+            } else {
+                // A subsequent page failed, but we still have results from previous pages.
+                // It's better to show a result from a partial list than nothing at all.
+                pickRandomRestaurant();
+            }
         }
         
+        function pickRandomRestaurant() {
+            if (allResults.length > 0) {
+                const randomIndex = Math.floor(Math.random() * allResults.length);
+                displayRestaurant(allResults[randomIndex]);
+            } else {
+                displayNoResults();
+            }
+            resetButtons();
+        }
+
         function displayRestaurant(restaurant) {
             resultHeading.textContent = "Tonight you're eating at...";
             restaurantNameEl.textContent = restaurant.name;
-            restaurantAddressEl.textContent = restaurant.formatted_address;
+            restaurantAddressEl.textContent = restaurant.vicinity;
             
             restaurantRatingEl.textContent = restaurant.rating ? `⭐ ${restaurant.rating}` : '';
             restaurantRatingEl.classList.toggle('hidden', !restaurant.rating);
@@ -224,13 +254,20 @@
             restaurantCard.classList.add('fade-in');
         }
 
-        function displayNoResults(query) {
-            resultHeading.textContent = `Sorry, no open restaurants found for "${query}". Try a broader search!`;
+        function displayNoResults() {
+            resultHeading.textContent = `Sorry, no open restaurants found matching your criteria. Try a broader search!`;
             restaurantCard.classList.add('hidden');
             resultContainer.classList.remove('hidden');
         }
+
+        function resetButtons() {
+            submitButton.disabled = false;
+            luckyButton.disabled = false;
+            submitButton.textContent = 'Find My Meal!';
+        }
         
-        window.onload = initAutocomplete;
+        // This makes our initialize function the callback for the Google Maps script
+        window.initialize = initialize;
     </script>
 
 </body>
