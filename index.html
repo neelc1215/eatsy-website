@@ -4,18 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Eatsy - The Indecisive Eater's Best Friend</title>
-    <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Google Fonts for a nice, clean font -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     
-    <!-- 
-      !!! IMPORTANT !!!
-      REPLACE 'YOUR_API_KEY_HERE' WITH YOUR ACTUAL GOOGLE MAPS API KEY.
-      The '&libraries=places' part is crucial for restaurant searching and autocomplete.
-    -->
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDwYVyBB8vsqfjTsL2V4ZMIf5V9d7B8-u0&libraries=places" async></script>
 
     <style>
@@ -55,22 +48,18 @@
 
     <main class="bg-white p-6 sm:p-8 rounded-2xl shadow-lg w-full max-w-lg m-4">
         
-        <!-- Header Section -->
         <header class="text-center mb-6">
             <h1 class="text-4xl font-bold text-teal-600">Eatsy</h1>
             <p class="text-gray-500 mt-1">Can't decide? Let fate (and our code) pick for you.</p>
         </header>
 
-        <!-- Form for user input -->
         <form id="restaurant-form">
             <div class="space-y-4">
-                <!-- Location Input -->
                 <div class="relative">
                     <label for="location" class="block text-sm font-medium text-gray-700">Enter an address or city</label>
-                    <input type="text" id="location" name="location" class="mt-1 block w-full bg-gray-100 border-transparent rounded-md p-3 focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., West Lafayette, IN" required>
+                    <input type="text" id="location" name="location" class="mt-1 block w-full bg-gray-100 border-transparent rounded-md p-3 focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., Naperville, IL" required>
                 </div>
 
-                <!-- Budget Select -->
                 <div>
                     <label for="budget" class="block text-sm font-medium text-gray-700">Budget</label>
                     <select id="budget" name="budget" class="mt-1 block w-full bg-gray-100 border-transparent rounded-md p-3 focus:ring-teal-500 focus:border-teal-500">
@@ -82,7 +71,6 @@
                     </select>
                 </div>
 
-                <!-- Cuisine Select -->
                 <div>
                     <label for="cuisine" class="block text-sm font-medium text-gray-700">Cuisine Preference</label>
                     <select id="cuisine" name="cuisine" class="mt-1 block w-full bg-gray-100 border-transparent rounded-md p-3 focus:ring-teal-500 focus:border-teal-500">
@@ -100,13 +88,11 @@
                 </div>
             </div>
 
-            <!-- Submit Button -->
             <button type="submit" id="submit-button" class="w-full bg-teal-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-transform transform hover:scale-105 mt-6 disabled:bg-gray-400 disabled:cursor-not-allowed">
                 Find My Meal!
             </button>
         </form>
 
-        <!-- Result Section - Hidden by default -->
         <div id="result-container" class="mt-8 hidden">
             <div class="border-t pt-6 text-center">
                  <h2 id="result-heading" class="text-sm font-medium text-gray-500 mb-2">Tonight you're eating at...</h2>
@@ -136,8 +122,8 @@
             
             // Initialize the Places Autocomplete service
             autocomplete = new google.maps.places.Autocomplete(locationInput, {
-                types: ['(cities)'], // Restrict to cities/regions for broader searches
-                fields: ['geometry', 'name'] // Ask for location coordinates and name
+                types: ['(regions)'], // Restrict to broader regions like cities and states
+                fields: ['name'] // Ask for just the name of the place
             });
 
             // Listen for when a user selects a place from the dropdown
@@ -162,7 +148,7 @@
         form.addEventListener('submit', function(event) {
             event.preventDefault(); // Stop the form from reloading the page.
 
-            if (!selectedPlace || !selectedPlace.geometry) {
+            if (!selectedPlace || !selectedPlace.name) {
                 alert("Please select a valid location from the dropdown suggestions.");
                 return;
             }
@@ -174,27 +160,26 @@
             const budgetChoice = document.getElementById('budget').value;
             const cuisineChoice = document.getElementById('cuisine').value;
 
-            // --- REAL GOOGLE PLACES API SEARCH ---
+            // --- *** NEW: BUILD A TEXT SEARCH QUERY *** ---
+            // This creates a much more natural and effective search string.
+            let searchQuery = (cuisineChoice ? cuisineChoice + ' ' : '') + 'restaurant in ' + selectedPlace.name;
+            
             const searchRequest = {
-                location: selectedPlace.geometry.location,
-                radius: '5000', // Search within a 5km radius (about 3 miles)
-                type: 'restaurant',
-                openNow: true, // Only find places that are currently open
+                query: searchQuery,
+                openNow: true,
             };
             
-            // Add optional parameters if the user selected them
-            if (cuisineChoice) {
-                searchRequest.keyword = cuisineChoice;
-            }
+            // Add budget parameters if the user selected them
             if (budgetChoice !== 'any') {
                 searchRequest.minPrice = 0;
                 searchRequest.maxPrice = parseInt(budgetChoice);
             }
 
-            // Create a temporary div to use the PlacesService
+            // Create a PlacesService instance
             const service = new google.maps.places.PlacesService(document.createElement('div'));
 
-            service.nearbySearch(searchRequest, (results, status) => {
+            // --- *** NEW: USE TEXT SEARCH INSTEAD OF NEARBY SEARCH *** ---
+            service.textSearch(searchRequest, (results, status) => {
                 if (status === google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
                     // --- RANDOM SELECTION ---
                     const randomIndex = Math.floor(Math.random() * results.length);
@@ -204,7 +189,7 @@
                     displayRestaurant(chosenRestaurant);
                 } else {
                     // --- HANDLE NO RESULTS ---
-                    displayNoResults();
+                    displayNoResults(searchQuery);
                 }
                 
                 submitButton.disabled = false;
@@ -215,7 +200,7 @@
         function displayRestaurant(restaurant) {
             resultHeading.textContent = "Tonight you're eating at...";
             restaurantNameEl.textContent = restaurant.name;
-            restaurantAddressEl.textContent = restaurant.vicinity; // 'vicinity' is like a friendly address
+            restaurantAddressEl.textContent = restaurant.formatted_address; // Use formatted_address for better accuracy
             
             // Handle optional rating and budget
             restaurantRatingEl.textContent = restaurant.rating ? `⭐ ${restaurant.rating}` : '';
@@ -235,8 +220,9 @@
             restaurantCard.classList.add('fade-in');
         }
 
-        function displayNoResults() {
-            resultHeading.textContent = "No matches found!";
+        function displayNoResults(query) {
+            // Provide a more helpful no-results message
+            resultHeading.textContent = `Sorry, no open restaurants found for "${query}". Try a broader search!`;
             restaurantCard.classList.add('hidden'); // Hide the card content
             resultContainer.classList.remove('hidden'); // Show the container with the "No matches" heading
         }
@@ -247,4 +233,3 @@
 
 </body>
 </html>
-
