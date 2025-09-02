@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eatsy - The Indecisive Eater's Best Friend</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts for a nice, clean font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* Applying the Inter font to the whole page */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Simple animation for the result card */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 flex items-center justify-center min-h-screen">
+
+    <main class="bg-white p-6 sm:p-8 rounded-2xl shadow-lg w-full max-w-lg m-4">
+        
+        <!-- Header Section -->
+        <header class="text-center mb-6">
+            <h1 class="text-4xl font-bold text-teal-600">Eatsy</h1>
+            <p class="text-gray-500 mt-1">Can't decide? Let fate (and our code) pick for you.</p>
+        </header>
+
+        <!-- Form for user input -->
+        <form id="restaurant-form">
+            <div class="space-y-4">
+                <!-- Location Input -->
+                <div class="relative">
+                    <label for="location" class="block text-sm font-medium text-gray-700">Your Location</label>
+                    <input type="text" id="location" name="location" class="mt-1 block w-full bg-gray-100 border-transparent rounded-md p-3 focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., Downtown, Springfield" required autocomplete="off">
+                    <div id="location-dropdown" class="absolute z-10 w-full bg-white border border-gray-200 rounded-md mt-1 shadow-lg hidden max-h-48 overflow-y-auto">
+                        <!-- Dropdown items will be inserted here -->
+                    </div>
+                </div>
+
+                <!-- Budget Select -->
+                <div>
+                    <label for="budget" class="block text-sm font-medium text-gray-700">Budget</label>
+                    <select id="budget" name="budget" class="mt-1 block w-full bg-gray-100 border-transparent rounded-md p-3 focus:ring-teal-500 focus:border-teal-500">
+                        <option value="any">Any</option>
+                        <option value="$">$ (Affordable)</option>
+                        <option value="$$">$$ (Moderate)</option>
+                        <option value="$$$">$$$ (Pricey)</option>
+                    </select>
+                </div>
+
+                <!-- Cuisine Select -->
+                <div>
+                    <label for="cuisine" class="block text-sm font-medium text-gray-700">Cuisine Preference</label>
+                    <select id="cuisine" name="cuisine" class="mt-1 block w-full bg-gray-100 border-transparent rounded-md p-3 focus:ring-teal-500 focus:border-teal-500">
+                        <option value="any">Any</option>
+                        <option value="Italian">Italian</option>
+                        <option value="Mexican">Mexican</option>
+                        <option value="American">American</option>
+                        <option value="Japanese">Japanese</option>
+                        <option value="Indian">Indian</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Submit Button -->
+            <button type="submit" class="w-full bg-teal-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-transform transform hover:scale-105 mt-6">
+                Find My Meal!
+            </button>
+        </form>
+
+        <!-- Result Section - Hidden by default -->
+        <div id="result-container" class="mt-8 hidden">
+            <div class="border-t pt-6 text-center">
+                 <h2 class="text-sm font-medium text-gray-500 mb-2">Tonight you're eating at...</h2>
+                <div id="restaurant-card" class="bg-teal-50 p-6 rounded-xl border border-teal-200">
+                    <h3 id="restaurant-name" class="text-2xl font-bold text-teal-800"></h3>
+                    <p id="restaurant-address" class="text-gray-600 mt-1"></p>
+                    <p class="mt-2">
+                        <span id="restaurant-cuisine" class="inline-block bg-white text-teal-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full"></span>
+                        <span id="restaurant-budget" class="inline-block bg-white text-teal-800 text-xs font-semibold px-2.5 py-0.5 rounded-full"></span>
+                    </p>
+                    <a id="map-link" href="#" target="_blank" class="mt-4 inline-block bg-white text-teal-600 font-semibold py-2 px-4 border border-teal-300 rounded-lg hover:bg-teal-100 transition-colors">
+                        View on Map
+                    </a>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // --- MOCK RESTAURANT DATA ---
+        // In a real application, this data would come from an API like Google Maps.
+        // For this free version, we're using a pre-defined list.
+        const restaurants = [
+            { name: "The Pasta Boiler", address: "123 State St, West Lafayette", cuisine: "Italian", budget: "$$" },
+            { name: "Chauncey Hill Tacos", address: "456 Northwestern Ave, West Lafayette", cuisine: "Mexican", budget: "$" },
+            { name: "Purdue Burger Union", address: "789 Stadium Mall Dr, West Lafayette", cuisine: "American", budget: "$" },
+            { name: "Sushi Rolls & Degrees", address: "101 Pierce St, West Lafayette", cuisine: "Japanese", budget: "$$$" },
+            { name: "Taste of the Wabash", address: "212 River Rd, West Lafayette", cuisine: "Indian", budget: "$$" },
+            { name: "Lafayette Pizza Kitchen", address: "333 Main St, Lafayette", cuisine: "Italian", budget: "$" },
+            { name: "El Rodeo", address: "444 Levee Plaza, West Lafayette", cuisine: "Mexican", budget: "$$" },
+            { name: "The Triple XXX", address: "555 Salisbury St, West Lafayette", cuisine: "American", budget: "$" },
+            { name: "Katana", address: "666 Sagamore Pkwy, Lafayette", cuisine: "Japanese", budget: "$$" },
+            { name: "India Mahal", address: "777 Columbia St, Lafayette", cuisine: "Indian", budget: "$" }
+        ];
+
+        // Pre-defined list of locations for the autocomplete dropdown.
+        const locations = [
+            "West Lafayette, IN",
+            "Lafayette, IN",
+            "Purdue University Campus",
+            "Chauncey Hill",
+            "Wabash Riverfront",
+            "Downtown Lafayette",
+            "Levee Plaza"
+        ];
+
+        // --- DOM ELEMENT REFERENCES ---
+        // Get references to the HTML elements we need to interact with.
+        const form = document.getElementById('restaurant-form');
+        const resultContainer = document.getElementById('result-container');
+        const restaurantCard = document.getElementById('restaurant-card');
+        
+        // Form inputs
+        const locationInput = document.getElementById('location');
+        const locationDropdown = document.getElementById('location-dropdown');
+
+        // Result card elements
+        const restaurantNameEl = document.getElementById('restaurant-name');
+        const restaurantAddressEl = document.getElementById('restaurant-address');
+        const restaurantCuisineEl = document.getElementById('restaurant-cuisine');
+        const restaurantBudgetEl = document.getElementById('restaurant-budget');
+        const mapLinkEl = document.getElementById('map-link');
+
+        // --- LOCATION AUTOCOMPLETE LOGIC ---
+        locationInput.addEventListener('input', () => {
+            const inputText = locationInput.value.trim().toLowerCase();
+            
+            // Clear and hide dropdown if input is empty
+            if (!inputText) {
+                locationDropdown.innerHTML = '';
+                locationDropdown.classList.add('hidden');
+                return;
+            }
+
+            // Find matching locations
+            const filteredLocations = locations.filter(loc => loc.toLowerCase().includes(inputText));
+            
+            // Populate and show the dropdown if there are matches
+            if (filteredLocations.length > 0) {
+                locationDropdown.innerHTML = filteredLocations.map(loc => 
+                    `<div class="p-3 hover:bg-teal-50 cursor-pointer rounded-md">${loc}</div>`
+                ).join('');
+                locationDropdown.classList.remove('hidden');
+            } else {
+                locationDropdown.innerHTML = '';
+                locationDropdown.classList.add('hidden');
+            }
+        });
+
+        // Handle clicks on dropdown items
+        locationDropdown.addEventListener('click', (event) => {
+            // Check if a dropdown item was clicked
+            if (event.target && event.target.matches('div.p-3')) {
+                locationInput.value = event.target.textContent; // Set input value
+                locationDropdown.innerHTML = ''; // Clear dropdown
+                locationDropdown.classList.add('hidden'); // Hide dropdown
+            }
+        });
+
+        // Hide dropdown when clicking anywhere else on the page
+        document.addEventListener('click', (event) => {
+            if (!locationInput.contains(event.target) && !locationDropdown.contains(event.target)) {
+                locationDropdown.classList.add('hidden');
+            }
+        });
+
+        // --- FORM SUBMIT EVENT LISTENER ---
+        // Listen for when the user clicks the "Find My Meal!" button.
+        form.addEventListener('submit', function(event) {
+            event.preventDefault(); // Stop the form from reloading the page.
+
+            // Get the user's choices from the form.
+            const budgetChoice = document.getElementById('budget').value;
+            const cuisineChoice = document.getElementById('cuisine').value;
+
+            // --- FILTERING LOGIC ---
+            // Filter the main restaurant list to find ones that match the user's criteria.
+            let filteredRestaurants = restaurants.filter(restaurant => {
+                const budgetMatch = budgetChoice === 'any' || restaurant.budget === budgetChoice;
+                const cuisineMatch = cuisineChoice === 'any' || restaurant.cuisine === cuisineChoice;
+                return budgetMatch && cuisineMatch;
+            });
+            
+            // If no restaurants match, use the full list so we always have a result.
+            if (filteredRestaurants.length === 0) {
+                filteredRestaurants = restaurants;
+            }
+
+            // --- RANDOM SELECTION ---
+            // Pick a random restaurant from the filtered list.
+            const randomIndex = Math.floor(Math.random() * filteredRestaurants.length);
+            const chosenRestaurant = filteredRestaurants[randomIndex];
+
+            // --- DISPLAY LOGIC ---
+            // Update the result card with the chosen restaurant's details.
+            restaurantNameEl.textContent = chosenRestaurant.name;
+            restaurantAddressEl.textContent = chosenRestaurant.address;
+            restaurantCuisineEl.textContent = chosenRestaurant.cuisine;
+            restaurantBudgetEl.textContent = chosenRestaurant.budget;
+            
+            // Create a Google Maps link from the address.
+            mapLinkEl.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(chosenRestaurant.address)}`;
+
+            // Show the result container with a nice fade-in effect.
+            resultContainer.classList.remove('hidden');
+            restaurantCard.classList.remove('fade-in'); // remove class to re-trigger animation
+            void restaurantCard.offsetWidth; // This is a trick to force a reflow for the animation
+            restaurantCard.classList.add('fade-in');
+        });
+    </script>
+
+</body>
+</html>
+
