@@ -15,7 +15,8 @@
       !!! IMPORTANT !!!
       REPLACE 'YOUR_API_KEY_HERE' WITH YOUR ACTUAL GOOGLE MAPS API KEY.
     -->
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDwYVyBB8vsqfjTsL2V4ZMIf5V9d7B8-u0&libraries=places" async></script>
+    <!-- UPDATED: Added a callback to reliably initialize the script -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY_HERE&libraries=places&callback=initialize" async defer></script>
 
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -115,10 +116,9 @@
         let autocomplete;
         let selectedPlace; 
 
-        // UPDATED: This function is called when the Google Maps script loads
+        // This function is now reliably called by the Google Maps script tag
         function initialize() {
             const locationInput = document.getElementById('location');
-            // UPDATED: We need the geometry to get coordinates for nearbySearch
             autocomplete = new google.maps.places.Autocomplete(locationInput, {
                 types: ['(regions)'],
                 fields: ['geometry', 'name'] 
@@ -154,7 +154,7 @@
             performSearch({});
         });
 
-        // --- NEW: MAJOR REFACTOR OF THE SEARCH LOGIC TO HANDLE PAGINATION ---
+        // --- MAJOR REFACTOR OF THE SEARCH LOGIC TO HANDLE PAGINATION ---
 
         let allResults = [];
         let pageCount = 0;
@@ -203,7 +203,6 @@
                 pageCount++;
 
                 // Fetch up to 2 more pages for a total of 3 (approx. 60 results)
-                // This gives us a much larger pool to choose from.
                 if (pagination && pagination.hasNextPage && pageCount < 3) {
                     // Wait a moment before fetching the next page, as per Google's recommendation
                     setTimeout(() => {
@@ -219,7 +218,6 @@
                 resetButtons();
             } else {
                 // A subsequent page failed, but we still have results from previous pages.
-                // It's better to show a result from a partial list than nothing at all.
                 pickRandomRestaurant();
             }
         }
@@ -266,8 +264,8 @@
             submitButton.textContent = 'Find My Meal!';
         }
         
-        // This makes our initialize function the callback for the Google Maps script
-        window.initialize = initialize;
+        // This line is no longer needed as the callback is in the script tag
+        // window.initialize = initialize;
     </script>
 
 </body>
