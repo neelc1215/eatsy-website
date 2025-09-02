@@ -15,7 +15,6 @@
       !!! IMPORTANT !!!
       REPLACE 'YOUR_API_KEY_HERE' WITH YOUR ACTUAL GOOGLE MAPS API KEY.
     -->
-    <!-- UPDATED: Added a callback to reliably initialize the script -->
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDwYVyBB8vsqfjTsL2V4ZMIf5V9d7B8-u0&libraries=places&callback=initialize" async defer></script>
 
     <style>
@@ -116,9 +115,9 @@
         let autocomplete;
         let selectedPlace; 
 
-        // This function is now reliably called by the Google Maps script tag
         function initialize() {
             const locationInput = document.getElementById('location');
+            // UPDATED: We need the viewport to create our search grid
             autocomplete = new google.maps.places.Autocomplete(locationInput, {
                 types: ['(regions)'],
                 fields: ['geometry', 'name'] 
@@ -140,96 +139,115 @@
         const restaurantBudgetEl = document.getElementById('restaurant-budget');
         const mapLinkEl = document.getElementById('map-link');
 
-        // Main form submission (with filters)
         form.addEventListener('submit', function(event) {
             event.preventDefault(); 
             const budgetChoice = document.getElementById('budget').value;
             const cuisineChoice = document.getElementById('cuisine').value;
-            performSearch({ budget: budgetChoice, cuisine: cuisineChoice });
+            performGridSearch({ budget: budgetChoice, cuisine: cuisineChoice });
         });
 
-        // "Feeling Lucky" button click event
         luckyButton.addEventListener('click', function() {
-            // Perform search with no filters
-            performSearch({});
+            performGridSearch({});
         });
 
-        // --- MAJOR REFACTOR OF THE SEARCH LOGIC TO HANDLE PAGINATION ---
-
+        // --- NEW GRID SEARCH IMPLEMENTATION ---
+        
         let allResults = [];
-        let pageCount = 0;
-        let service;
+        let completedSearches = 0;
+        let totalSearches = 4; // We'll do a 2x2 grid search
 
-        function performSearch(filters) {
-            if (!selectedPlace || !selectedPlace.geometry) {
-                alert("Please select a valid location from the dropdown suggestions.");
+        function performGridSearch(filters) {
+            if (!selectedPlace || !selectedPlace.geometry || !selectedPlace.geometry.viewport) {
+                alert("Please select a valid location from the dropdown. This location must provide a map area.");
                 return;
             }
 
-            // Reset state for new search
             allResults = [];
-            pageCount = 0;
+            completedSearches = 0;
             
-            submitButton.disabled = true;
-            luckyButton.disabled = true;
-            submitButton.textContent = 'Searching...';
-            resultContainer.classList.add('hidden');
+            setLoadingState(true);
 
-            const searchRequest = {
-                location: selectedPlace.geometry.location,
-                radius: '5000', // 5km radius
-                type: 'restaurant',
-                openNow: true,
-            };
+            const viewport = selectedPlace.geometry.viewport;
+            const ne = viewport.getNorthEast();
+            const sw = viewport.getSouthWest();
 
-            // Add filters if they exist
-            if (filters.cuisine) {
-                searchRequest.keyword = filters.cuisine;
-            }
-            if (filters.budget && filters.budget !== 'any') {
-                searchRequest.minPrice = 0;
-                searchRequest.maxPrice = parseInt(filters.budget);
-            }
+            // Calculate center points for the four quadrants of the viewport
+            const latMid = (ne.lat() + sw.lat()) / 2;
+            const lngMid = (ne.lng() + sw.lng()) / 2;
 
-            service = new google.maps.places.PlacesService(document.createElement('div'));
-            // Start the first search
-            service.nearbySearch(searchRequest, searchCallback);
-        }
+            const searchCenters = [
+                { lat: (ne.lat() + latMid) / 2, lng: (sw.lng() + lngMid) / 2 }, // NW
+                { lat: (ne.lat() + latMid) / 2, lng: (ne.lng() + lngMid) / 2 }, // NE
+                { lat: (sw.lat() + latMid) / 2, lng: (sw.lng() + lngMid) / 2 }, // SW
+                { lat: (sw.lat() + latMid) / 2, lng: (ne.lng() + lngMid) / 2 }  // SE
+            ];
+            
+            // Calculate a dynamic radius based on the size of the viewport
+            const diagonalDistance = google.maps.geometry.spherical.computeDistanceBetween(ne, sw);
+            const radius = diagonalDistance / 4; // Search a quarter of the diagonal distance from each point
 
-        // This function is called for EACH page of results Google returns.
-        function searchCallback(results, status, pagination) {
-            if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-                allResults = allResults.concat(results); // Add new results to our master list
-                pageCount++;
-
-                // Fetch up to 2 more pages for a total of 3 (approx. 60 results)
-                if (pagination && pagination.hasNextPage && pageCount < 3) {
-                    // Wait a moment before fetching the next page, as per Google's recommendation
-                    setTimeout(() => {
-                        pagination.nextPage();
-                    }, 200);
-                } else {
-                    // We have all our results, now we can pick one!
-                    pickRandomRestaurant();
+            searchCenters.forEach(center => {
+                const searchRequest = {
+                    location: center,
+                    radius: radius,
+                    type: 'restaurant',
+                    openNow: true,
+                };
+                if (filters.cuisine) searchRequest.keyword = filters.cuisine;
+                if (filters.budget && filters.budget !== 'any') {
+                    searchRequest.minPrice = 0;
+                    searchRequest.maxPrice = parseInt(filters.budget);
                 }
-            } else if (pageCount === 0) {
-                // This means the very first search failed, so there are no results.
-                displayNoResults();
-                resetButtons();
-            } else {
-                // A subsequent page failed, but we still have results from previous pages.
-                pickRandomRestaurant();
-            }
+                
+                // Execute a sub-search for this quadrant
+                executeSubSearch(searchRequest);
+            });
         }
         
-        function pickRandomRestaurant() {
+        function executeSubSearch(request) {
+            const service = new google.maps.places.PlacesService(document.createElement('div'));
+            let pageCount = 0;
+            let subResults = [];
+
+            function searchCallback(results, status, pagination) {
+                if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+                    subResults = subResults.concat(results);
+                    pageCount++;
+                    if (pagination && pagination.hasNextPage && pageCount < 3) {
+                        setTimeout(() => pagination.nextPage(), 200);
+                    } else {
+                        // This sub-search is complete
+                        finalizeSubSearch();
+                    }
+                } else {
+                    // This sub-search failed or had no results, but we still count it as "completed"
+                    finalizeSubSearch();
+                }
+            }
+            
+            function finalizeSubSearch() {
+                allResults = allResults.concat(subResults);
+                completedSearches++;
+                // If all four searches are done, we can process the final list
+                if (completedSearches === totalSearches) {
+                    processFinalResults();
+                }
+            }
+            
+            service.nearbySearch(request, searchCallback);
+        }
+
+        function processFinalResults() {
             if (allResults.length > 0) {
-                const randomIndex = Math.floor(Math.random() * allResults.length);
-                displayRestaurant(allResults[randomIndex]);
+                // De-duplicate results using the unique place_id
+                const uniqueResults = [...new Map(allResults.map(item => [item.place_id, item])).values()];
+                
+                const randomIndex = Math.floor(Math.random() * uniqueResults.length);
+                displayRestaurant(uniqueResults[randomIndex]);
             } else {
                 displayNoResults();
             }
-            resetButtons();
+            setLoadingState(false);
         }
 
         function displayRestaurant(restaurant) {
@@ -239,10 +257,8 @@
             
             restaurantRatingEl.textContent = restaurant.rating ? `⭐ ${restaurant.rating}` : '';
             restaurantRatingEl.classList.toggle('hidden', !restaurant.rating);
-
             restaurantBudgetEl.textContent = restaurant.price_level ? '$'.repeat(restaurant.price_level) : '';
             restaurantBudgetEl.classList.toggle('hidden', !restaurant.price_level);
-            
             mapLinkEl.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurant.name)}&query_place_id=${restaurant.place_id}`;
 
             restaurantCard.classList.remove('hidden');
@@ -258,14 +274,13 @@
             resultContainer.classList.remove('hidden');
         }
 
-        function resetButtons() {
-            submitButton.disabled = false;
-            luckyButton.disabled = false;
-            submitButton.textContent = 'Find My Meal!';
+        function setLoadingState(isLoading) {
+            submitButton.disabled = isLoading;
+            luckyButton.disabled = isLoading;
+            submitButton.textContent = isLoading ? 'Searching...' : 'Find My Meal!';
         }
         
-        // This line is no longer needed as the callback is in the script tag
-        // window.initialize = initialize;
+        window.initialize = initialize;
     </script>
 
 </body>
